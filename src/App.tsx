@@ -23,6 +23,7 @@ import SettingsComponent from './components/Settings';
 import Clients from './components/Clients';
 import Products from './components/Products';
 import HelpCenter from './components/HelpCenter';
+import ConfirmModal from './components/ConfirmModal';
 
 type Tool = 'dashboard' | 'receipt' | 'invoice' | 'settings' | 'clients' | 'products' | 'help';
 
@@ -291,33 +292,13 @@ export default function App() {
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-xl md:text-2xl font-bold">Recent Activity</h2>
                   {activities.length > 0 && (
-                    <div className="flex items-center gap-2">
-                      {showClearConfirm ? (
-                        <div className="flex items-center gap-2 bg-red-50 px-3 py-1 rounded-lg border border-red-100 animate-in fade-in slide-in-from-right-2 duration-200">
-                          <span className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Are you sure?</span>
-                          <button 
-                            onClick={clearActivities}
-                            className="text-xs font-bold text-red-500 hover:text-red-700 transition-colors"
-                          >
-                            Yes
-                          </button>
-                          <button 
-                            onClick={() => setShowClearConfirm(false)}
-                            className="text-xs font-bold text-zinc-500 hover:text-zinc-700 transition-colors"
-                          >
-                            No
-                          </button>
-                        </div>
-                      ) : (
-                        <button 
-                          onClick={() => setShowClearConfirm(true)}
-                          className="text-xs font-bold text-red-500 hover:text-red-600 flex items-center gap-1 transition-colors"
-                        >
-                          <X size={14} />
-                          Clear Log
-                        </button>
-                      )}
-                    </div>
+                    <button 
+                      onClick={() => setShowClearConfirm(true)}
+                      className="text-xs font-bold text-red-500 hover:text-red-600 flex items-center gap-1 transition-colors"
+                    >
+                      <X size={14} />
+                      Clear Log
+                    </button>
                   )}
                 </div>
                 <div className="bg-white rounded-3xl border border-zinc-100 shadow-sm overflow-hidden">
@@ -462,6 +443,16 @@ export default function App() {
           }
         }
       `}</style>
+      {/* Confirm Modal */}
+      <ConfirmModal 
+        isOpen={showClearConfirm}
+        onClose={() => setShowClearConfirm(false)}
+        onConfirm={clearActivities}
+        title="Clear Activity Log"
+        message="Are you sure you want to clear your entire activity log? This action cannot be undone."
+        confirmText="Clear Log"
+        type="danger"
+      />
     </div>
   );
 }

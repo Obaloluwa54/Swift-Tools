@@ -104,7 +104,7 @@ export default function InvoiceGenerator({ onBack, onActivity }: { onBack: () =>
   const updateItem = (index: number, field: 'description' | 'amount', value: string | number) => {
     const newItems = [...data.items];
     if (field === 'amount') {
-      newItems[index].amount = Number(value);
+      newItems[index].amount = Number(value) || 0;
     } else {
       newItems[index].description = String(value);
     }
@@ -113,8 +113,9 @@ export default function InvoiceGenerator({ onBack, onActivity }: { onBack: () =>
   };
 
   const updateTax = (rate: number) => {
-    const totals = calculateTotals(data.items, rate);
-    setData({ ...data, taxRate: rate, ...totals });
+    const numericRate = Number(rate) || 0;
+    const totals = calculateTotals(data.items, numericRate);
+    setData({ ...data, taxRate: numericRate, ...totals });
   };
 
   const resetForm = () => {
@@ -373,7 +374,7 @@ export default function InvoiceGenerator({ onBack, onActivity }: { onBack: () =>
                     type="number" 
                     placeholder="Amount"
                     className="w-20 sm:w-24 px-3 py-2 rounded-lg border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/5 text-sm"
-                    value={item.amount}
+                    value={item.amount || ''}
                     onChange={(e) => updateItem(index, 'amount', e.target.value)}
                   />
                   <button 
@@ -391,7 +392,7 @@ export default function InvoiceGenerator({ onBack, onActivity }: { onBack: () =>
                 <input 
                   type="number" 
                   className="w-24 px-4 py-2 rounded-lg border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/5"
-                  value={data.taxRate}
+                  value={data.taxRate || ''}
                   onChange={(e) => updateTax(Number(e.target.value))}
                 />
               </div>

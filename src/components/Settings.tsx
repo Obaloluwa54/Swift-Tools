@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Save, Building2, MapPin, Phone, Globe, Image as ImageIcon, CheckCircle2, Upload, CreditCard } from 'lucide-react';
+import { Save, Building2, MapPin, Phone, Globe, Image as ImageIcon, CheckCircle2, Upload, CreditCard, X } from 'lucide-react';
+import { AnimatePresence } from 'motion/react';
 
 export interface BusinessSettings {
   businessName: string;
@@ -35,6 +36,7 @@ interface SettingsProps {
 export default function Settings({ onBack }: SettingsProps) {
   const [settings, setSettings] = useState<BusinessSettings>(DEFAULT_SETTINGS);
   const [isSaved, setIsSaved] = useState(false);
+  const [showError, setShowError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -54,7 +56,7 @@ export default function Settings({ onBack }: SettingsProps) {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 1024 * 1024) { // 1MB limit for localStorage
-        alert('File size too large. Please choose an image under 1MB.');
+        setShowError('File size too large. Please choose an image under 1MB.');
         return;
       }
       const reader = new FileReader();
@@ -295,6 +297,24 @@ export default function Settings({ onBack }: SettingsProps) {
           </div>
         </div>
       </div>
+
+      {/* Error Toast */}
+      <AnimatePresence>
+        {showError && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-red-600 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 z-50"
+          >
+            <X size={20} />
+            <span className="font-medium">{showError}</span>
+            <button onClick={() => setShowError(null)} className="ml-2 hover:bg-white/20 rounded-full p-1 transition-colors">
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
