@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Save, Building2, MapPin, Phone, Globe, Image as ImageIcon, CheckCircle2, Upload } from 'lucide-react';
+import { Save, Building2, MapPin, Phone, Globe, Image as ImageIcon, CheckCircle2, Upload, CreditCard } from 'lucide-react';
 
 export interface BusinessSettings {
   businessName: string;
@@ -9,6 +9,10 @@ export interface BusinessSettings {
   email: string;
   website: string;
   logoUrl: string;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  paymentLink: string;
 }
 
 const DEFAULT_SETTINGS: BusinessSettings = {
@@ -18,6 +22,10 @@ const DEFAULT_SETTINGS: BusinessSettings = {
   email: 'hello@business.com',
   website: 'www.business.com',
   logoUrl: 'https://picsum.photos/seed/business/200/200',
+  bankName: '',
+  accountNumber: '',
+  accountName: '',
+  paymentLink: '',
 };
 
 interface SettingsProps {
@@ -206,6 +214,74 @@ export default function Settings({ onBack }: SettingsProps) {
                   className="w-full px-4 py-3 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all"
                   placeholder="www.business.com"
                 />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-8 rounded-3xl border border-zinc-100 shadow-sm space-y-6">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-zinc-50 rounded-lg">
+                <CreditCard size={20} className="text-zinc-600" />
+              </div>
+              <h2 className="text-xl font-bold">Payment Details</h2>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-sm text-zinc-500 mb-4">These details will be used to generate payment QR codes on your documents.</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-zinc-700 mb-1">Bank Name</label>
+                  <input
+                    type="text"
+                    value={settings.bankName}
+                    onChange={(e) => setSettings({ ...settings, bankName: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all"
+                    placeholder="e.g. GTBank"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-zinc-700 mb-1">Account Number</label>
+                  <input
+                    type="text"
+                    value={settings.accountNumber}
+                    onChange={(e) => setSettings({ ...settings, accountNumber: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all"
+                    placeholder="0123456789"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-zinc-700 mb-1">Account Name</label>
+                <input
+                  type="text"
+                  value={settings.accountName}
+                  onChange={(e) => setSettings({ ...settings, accountName: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all"
+                  placeholder="Enter account name"
+                />
+              </div>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-zinc-100"></span>
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-white px-2 text-zinc-400">Or Payment Link</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-zinc-700 mb-1">Payment Link (Paystack, etc.)</label>
+                <input
+                  type="text"
+                  value={settings.paymentLink}
+                  onChange={(e) => setSettings({ ...settings, paymentLink: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all"
+                  placeholder="https://paystack.com/pay/your-link"
+                />
+                <p className="text-[10px] text-zinc-400 mt-1">If provided, the QR code will link directly to this payment page.</p>
               </div>
             </div>
           </div>

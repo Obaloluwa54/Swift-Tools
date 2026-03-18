@@ -1,15 +1,86 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Receipt, FileText, LayoutDashboard, Settings, HelpCircle, ChevronRight, Sparkles, Menu, X } from 'lucide-react';
+import { 
+  Receipt, 
+  FileText, 
+  LayoutDashboard, 
+  Settings, 
+  HelpCircle, 
+  ChevronRight, 
+  Sparkles, 
+  Menu, 
+  X, 
+  Users, 
+  Package,
+  Clock,
+  CheckCircle2
+} from 'lucide-react';
+import { Activity } from './types';
+import { cn } from './utils';
 import ReceiptGenerator from './components/ReceiptGenerator';
 import InvoiceGenerator from './components/InvoiceGenerator';
 import SettingsComponent from './components/Settings';
+import Clients from './components/Clients';
+import Products from './components/Products';
+import HelpCenter from './components/HelpCenter';
 
-type Tool = 'dashboard' | 'receipt' | 'invoice' | 'settings';
+type Tool = 'dashboard' | 'receipt' | 'invoice' | 'settings' | 'clients' | 'products' | 'help';
 
 export default function App() {
   const [activeTool, setActiveTool] = useState<Tool>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  const [stats, setStats] = useState({
+    invoices: 0,
+    receipts: 0,
+    clients: 0,
+    products: 0
+  });
+
+  useEffect(() => {
+    const savedActivities = localStorage.getItem('swifttools_activities');
+    if (savedActivities) {
+      setActivities(JSON.parse(savedActivities));
+    }
+  }, []);
+
+  useEffect(() => {
+    // Load stats
+    const clients = JSON.parse(localStorage.getItem('swifttools_clients') || '[]');
+    const products = JSON.parse(localStorage.getItem('swifttools_products') || '[]');
+    const invoicesCount = activities.filter(a => a.type === 'invoice').length;
+    const receiptsCount = activities.filter(a => a.type === 'receipt').length;
+
+    setStats({
+      invoices: invoicesCount,
+      receipts: receiptsCount,
+      clients: clients.length,
+      products: products.length
+    });
+  }, [activities]);
+
+  const logActivity = (type: Activity['type'], action: string, details: string) => {
+    const newActivity: Activity = {
+      id: Math.random().toString(36).substr(2, 9),
+      type,
+      action,
+      details,
+      timestamp: new Date().toISOString()
+    };
+    setActivities(prev => {
+      const updated = [newActivity, ...prev].slice(0, 10);
+      localStorage.setItem('swifttools_activities', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const clearActivities = () => {
+    setActivities([]);
+    localStorage.removeItem('swifttools_activities');
+    setShowClearConfirm(false);
+  };
 
   const tools = [
     {
@@ -25,6 +96,20 @@ export default function App() {
       description: 'Generate detailed invoices with tax calculations and due dates.',
       icon: <FileText className="w-6 h-6" />,
       color: 'bg-blue-50 text-blue-600',
+    },
+    {
+      id: 'clients' as Tool,
+      name: 'Client Manager',
+      description: 'Save and manage your recurring customers for quick invoicing.',
+      icon: <Users className="w-6 h-6" />,
+      color: 'bg-purple-50 text-purple-600',
+    },
+    {
+      id: 'products' as Tool,
+      name: 'Product Catalog',
+      description: 'Manage your products and services with pre-set pricing.',
+      icon: <Package className="w-6 h-6" />,
+      color: 'bg-orange-50 text-orange-600',
     }
   ];
 
@@ -79,7 +164,10 @@ export default function App() {
               onClick={() => handleToolSelect(tool.id)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTool === tool.id ? 'bg-zinc-900 text-white shadow-lg shadow-zinc-900/20' : 'text-zinc-500 hover:bg-zinc-50'}`}
             >
-              {tool.id === 'receipt' ? <Receipt size={20} /> : <FileText size={20} />}
+              {tool.id === 'receipt' && <Receipt size={20} />}
+              {tool.id === 'invoice' && <FileText size={20} />}
+              {tool.id === 'clients' && <Users size={20} />}
+              {tool.id === 'products' && <Package size={20} />}
               <span className="font-medium">{tool.name}</span>
             </button>
           ))}
@@ -93,7 +181,10 @@ export default function App() {
             <Settings size={20} />
             <span className="font-medium">Settings</span>
           </button>
-          <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-500 hover:bg-zinc-50 transition-all">
+          <button 
+            onClick={() => handleToolSelect('help')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTool === 'help' ? 'bg-zinc-900 text-white shadow-lg shadow-zinc-900/20' : 'text-zinc-500 hover:bg-zinc-50'}`}
+          >
             <HelpCircle size={20} />
             <span className="font-medium">Help Center</span>
           </button>
@@ -124,7 +215,57 @@ export default function App() {
                 <p className="text-zinc-500 text-base md:text-lg">Select a tool to get started with your business tasks.</p>
               </header>
 
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
+                {[
+                  { label: 'Invoices', value: stats.invoices, icon: <FileText size={18} />, color: 'text-blue-600', bg: 'bg-blue-50' },
+                  { label: 'Receipts', value: stats.receipts, icon: <Receipt size={18} />, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                  { label: 'Clients', value: stats.clients, icon: <Users size={18} />, color: 'text-purple-600', bg: 'bg-purple-50' },
+                  { label: 'Products', value: stats.products, icon: <Package size={18} />, color: 'text-orange-600', bg: 'bg-orange-50' },
+                ].map((stat, i) => (
+                  <div key={i} className="bg-white p-4 md:p-6 rounded-3xl border border-zinc-100 shadow-sm">
+                    <div className={`w-10 h-10 ${stat.bg} ${stat.color} rounded-xl flex items-center justify-center mb-4`}>
+                      {stat.icon}
+                    </div>
+                    <p className="text-2xl md:text-3xl font-bold text-zinc-900">{stat.value}</p>
+                    <p className="text-xs md:text-sm text-zinc-500 font-medium">{stat.label}</p>
+                  </div>
+                ))}
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                <div className="bg-indigo-600 p-8 rounded-3xl text-white shadow-xl shadow-indigo-600/20 relative overflow-hidden">
+                  <div className="relative z-10">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="px-2 py-1 bg-white/20 rounded text-[10px] font-bold uppercase tracking-widest">Early Access</div>
+                      <div className="px-2 py-1 bg-white/20 rounded text-[10px] font-bold uppercase tracking-widest">Beta</div>
+                    </div>
+                    <h2 className="text-2xl font-bold mb-2">Quick Start Guide</h2>
+                    <p className="text-indigo-100 mb-6 text-sm">Complete these steps to get your business up and running.</p>
+                    
+                    <div className="space-y-3">
+                      {[
+                        { label: "Set up business profile", done: stats.invoices > 0 || stats.receipts > 0 },
+                        { label: "Add your first client", done: stats.clients > 0 },
+                        { label: "Create a product catalog", done: stats.products > 0 },
+                        { label: "Generate your first document", done: stats.invoices > 0 || stats.receipts > 0 }
+                      ].map((step, i) => (
+                        <div key={i} className="flex items-center gap-3">
+                          <div className={cn(
+                            "w-5 h-5 rounded-full flex items-center justify-center border-2 transition-colors",
+                            step.done ? "bg-white border-white text-indigo-600" : "border-white/30"
+                          )}>
+                            {step.done && <CheckCircle2 size={12} />}
+                          </div>
+                          <span className={cn("text-sm font-medium", step.done ? "text-white/60 line-through" : "text-white")}>
+                            {step.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <Sparkles className="absolute -right-4 -bottom-4 text-white/10 w-32 h-32" />
+                </div>
+
                 {tools.map((tool) => (
                   <button
                     key={tool.id}
@@ -147,14 +288,77 @@ export default function App() {
               </div>
 
               <section className="mt-12 md:mt-16">
-                <h2 className="text-xl md:text-2xl font-bold mb-6">Recent Activity</h2>
-                <div className="bg-white rounded-3xl border border-zinc-100 shadow-sm overflow-hidden">
-                  <div className="p-8 text-center py-12 md:py-16">
-                    <div className="w-12 h-12 md:w-16 md:h-16 bg-zinc-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <LayoutDashboard className="text-zinc-300" />
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl md:text-2xl font-bold">Recent Activity</h2>
+                  {activities.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      {showClearConfirm ? (
+                        <div className="flex items-center gap-2 bg-red-50 px-3 py-1 rounded-lg border border-red-100 animate-in fade-in slide-in-from-right-2 duration-200">
+                          <span className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Are you sure?</span>
+                          <button 
+                            onClick={clearActivities}
+                            className="text-xs font-bold text-red-500 hover:text-red-700 transition-colors"
+                          >
+                            Yes
+                          </button>
+                          <button 
+                            onClick={() => setShowClearConfirm(false)}
+                            className="text-xs font-bold text-zinc-500 hover:text-zinc-700 transition-colors"
+                          >
+                            No
+                          </button>
+                        </div>
+                      ) : (
+                        <button 
+                          onClick={() => setShowClearConfirm(true)}
+                          className="text-xs font-bold text-red-500 hover:text-red-600 flex items-center gap-1 transition-colors"
+                        >
+                          <X size={14} />
+                          Clear Log
+                        </button>
+                      )}
                     </div>
-                    <p className="text-zinc-400 text-sm md:text-base">No recent activity found. Start by creating a document!</p>
-                  </div>
+                  )}
+                </div>
+                <div className="bg-white rounded-3xl border border-zinc-100 shadow-sm overflow-hidden">
+                  {activities.length > 0 ? (
+                    <div className="divide-y divide-zinc-50">
+                      {activities.map((activity) => (
+                        <div key={activity.id} className="p-4 md:p-6 flex items-center gap-4 hover:bg-zinc-50 transition-colors">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                            activity.type === 'receipt' ? 'bg-blue-50 text-blue-600' :
+                            activity.type === 'invoice' ? 'bg-emerald-50 text-emerald-600' :
+                            activity.type === 'client' ? 'bg-orange-50 text-orange-600' :
+                            'bg-purple-50 text-purple-600'
+                          }`}>
+                            {activity.type === 'receipt' && <Receipt size={18} />}
+                            {activity.type === 'invoice' && <FileText size={18} />}
+                            {activity.type === 'client' && <Users size={18} />}
+                            {activity.type === 'product' && <Package size={18} />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-zinc-900 truncate">{activity.action}</p>
+                            <p className="text-xs text-zinc-500 truncate">{activity.details}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] text-zinc-400 uppercase tracking-widest font-semibold">
+                              {new Date(activity.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                            </p>
+                            <p className="text-[10px] text-zinc-400">
+                              {new Date(activity.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center py-12 md:py-16">
+                      <div className="w-12 h-12 md:w-16 md:h-16 bg-zinc-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Clock className="text-zinc-300" />
+                      </div>
+                      <p className="text-zinc-400 text-sm md:text-base">No recent activity found. Start by creating a document!</p>
+                    </div>
+                  )}
                 </div>
               </section>
             </motion.div>
@@ -167,7 +371,10 @@ export default function App() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
             >
-              <ReceiptGenerator onBack={() => setActiveTool('dashboard')} />
+              <ReceiptGenerator 
+                onBack={() => setActiveTool('dashboard')} 
+                onActivity={(action, details) => logActivity('receipt', action, details)}
+              />
             </motion.div>
           )}
 
@@ -178,7 +385,10 @@ export default function App() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
             >
-              <InvoiceGenerator onBack={() => setActiveTool('dashboard')} />
+              <InvoiceGenerator 
+                onBack={() => setActiveTool('dashboard')} 
+                onActivity={(action, details) => logActivity('invoice', action, details)}
+              />
             </motion.div>
           )}
 
@@ -192,7 +402,50 @@ export default function App() {
               <SettingsComponent onBack={() => setActiveTool('dashboard')} />
             </motion.div>
           )}
+
+          {activeTool === 'clients' && (
+            <motion.div 
+              key="clients"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+            >
+              <Clients 
+                onBack={() => setActiveTool('dashboard')} 
+                onActivity={(action, details) => logActivity('client', action, details)}
+              />
+            </motion.div>
+          )}
+
+          {activeTool === 'products' && (
+            <motion.div 
+              key="products"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+            >
+              <Products 
+                onBack={() => setActiveTool('dashboard')} 
+                onActivity={(action, details) => logActivity('product', action, details)}
+              />
+            </motion.div>
+          )}
+
+          {activeTool === 'help' && (
+            <motion.div 
+              key="help"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+            >
+              <HelpCenter onBack={() => setActiveTool('dashboard')} />
+            </motion.div>
+          )}
         </AnimatePresence>
+
+        <footer className="p-8 border-t border-zinc-100 text-center text-zinc-400 text-sm no-print">
+          <p>© {new Date().getFullYear()} SwiftTools. Built with <span className="text-zinc-900 font-bold">Genix</span>.</p>
+        </footer>
       </main>
 
       <style>{`

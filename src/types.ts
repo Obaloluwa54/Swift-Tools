@@ -1,4 +1,4 @@
-export type TemplateType = 'modern' | 'classic' | 'minimal';
+export type TemplateType = 'minimal';
 
 export interface ReceiptData {
   businessName: string;
@@ -26,4 +26,29 @@ export interface InvoiceData extends Omit<ReceiptData, 'template'> {
   subtotal: number;
   taxAmount: number;
   template: TemplateType;
+}
+
+export interface Client {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  notes?: string;
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  category?: string;
+}
+
+export interface Activity {
+  id: string;
+  type: 'receipt' | 'invoice' | 'client' | 'product';
+  action: string;
+  timestamp: string;
+  details: string;
 }
