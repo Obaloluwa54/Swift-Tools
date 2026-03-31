@@ -3,9 +3,8 @@ import { Download, Plus, Trash2, Printer, ArrowLeft, MessageCircle, Layout, Glob
 import { domToCanvas } from 'modern-screenshot';
 import jsPDF from 'jspdf';
 import { QRCodeSVG } from 'qrcode.react';
-import { InvoiceData, TemplateType, Client, Product } from '../types';
+import { InvoiceData, TemplateType, Client, Product, BusinessSettings } from '../types';
 import { cn } from '../utils';
-import { BusinessSettings } from './Settings';
 import { motion, AnimatePresence } from 'motion/react';
 import ConfirmModal from './ConfirmModal';
 
@@ -35,7 +34,8 @@ export default function InvoiceGenerator({ onBack, onActivity }: { onBack: () =>
     total: 1320.00,
     paymentMethod: 'Bank Transfer',
     notes: 'Payment is due within 14 days. Thank you!',
-    template: 'minimal'
+    template: 'minimal',
+    customFields: []
   });
   const [error, setError] = useState<string | null>(null);
 
@@ -52,14 +52,16 @@ export default function InvoiceGenerator({ onBack, onActivity }: { onBack: () =>
         businessEmail: settings.email,
         businessWebsite: settings.website,
         logoUrl: settings.logoUrl,
+        template: settings.defaultTemplate || prev.template,
+        customFields: settings.defaultCustomFields || prev.customFields,
       }));
     }
 
     const savedClients = localStorage.getItem('swifttools_clients');
-    if (savedClients) setClients(JSON.parse(savedClients));
+    if (savedClients) setClients(JSON.parse(savedClients) || []);
 
     const savedProducts = localStorage.getItem('swifttools_products');
-    if (savedProducts) setProducts(JSON.parse(savedProducts));
+    if (savedProducts) setProducts(JSON.parse(savedProducts) || []);
   }, []);
 
   const invoiceRef = useRef<HTMLDivElement>(null);
@@ -118,6 +120,22 @@ export default function InvoiceGenerator({ onBack, onActivity }: { onBack: () =>
     setData({ ...data, taxRate: numericRate, ...totals });
   };
 
+  const addCustomField = () => {
+    const newField = { id: Math.random().toString(36).substr(2, 9), label: '', value: '' };
+    setData({ ...data, customFields: [...(data.customFields || []), newField] });
+  };
+
+  const removeCustomField = (id: string) => {
+    setData({ ...data, customFields: (data.customFields || []).filter(f => f.id !== id) });
+  };
+
+  const updateCustomField = (id: string, field: 'label' | 'value', value: string) => {
+    setData({
+      ...data,
+      customFields: (data.customFields || []).map(f => f.id === id ? { ...f, [field]: value } : f)
+    });
+  };
+
   const resetForm = () => {
     setData({
       ...data,
@@ -127,7 +145,8 @@ export default function InvoiceGenerator({ onBack, onActivity }: { onBack: () =>
       subtotal: 0,
       taxAmount: 0,
       total: 0,
-      notes: ''
+      notes: '',
+      customFields: businessSettings?.defaultCustomFields || []
     });
     onActivity?.('Cleared Form', 'Reset all fields in the invoice generator');
   };
@@ -146,6 +165,11 @@ export default function InvoiceGenerator({ onBack, onActivity }: { onBack: () =>
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
       pdf.save(`${data.invoiceNumber}.pdf`);
+      
+      // Save to localStorage for dashboard
+      const savedInvoices = JSON.parse(localStorage.getItem('swifttools_invoices') || '[]');
+      localStorage.setItem('swifttools_invoices', JSON.stringify([data, ...savedInvoices]));
+      
       onActivity?.('Generated Invoice', `Invoice #${data.invoiceNumber} for ${data.customerName}`);
     } catch (err) {
       console.error('Failed to generate PDF:', err);
@@ -168,18 +192,6 @@ export default function InvoiceGenerator({ onBack, onActivity }: { onBack: () =>
     const url = `mailto:${data.clientEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     window.open(url, '_blank');
     onActivity?.('Shared Invoice', `Shared Invoice #${data.invoiceNumber} via Email`);
-  };
-
-  const getQRCodeValue = () => {
-    if (businessSettings?.paymentLink) {
-      // If there's a payment link, we can append the amount if the provider supports it
-      // For simplicity, we just return the link
-      return businessSettings.paymentLink;
-    }
-    if (businessSettings?.accountNumber) {
-      return `Bank: ${businessSettings.bankName}\nAccount: ${businessSettings.accountNumber}\nName: ${businessSettings.accountName}\nAmount: ${data.currency}${data.total.toFixed(2)}`;
-    }
-    return '';
   };
 
   const handlePrint = () => {
@@ -250,6 +262,62 @@ export default function InvoiceGenerator({ onBack, onActivity }: { onBack: () =>
               {error}
             </motion.div>
           )}
+          <div className="bg-white p-6 rounded-2xl border border-zinc-100 shadow-sm space-y-4">
+            <h3 className="text-lg font-semibold text-zinc-900 mb-4">Template & Custom Fields</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Template</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['minimal', 'professional', 'compact'] as TemplateType[]).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setData({ ...data, template: t })}
+                      className={`px-3 py-2 rounded-xl border text-xs font-bold capitalize transition-all ${
+                        data.template === t
+                          ? 'bg-zinc-900 border-zinc-900 text-white'
+                          : 'bg-white border-zinc-100 text-zinc-500 hover:border-zinc-200'
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider">Custom Fields</label>
+                  <button onClick={addCustomField} className="text-[10px] font-bold text-zinc-900 hover:text-zinc-700 flex items-center gap-1">
+                    <Plus size={12} /> Add Field
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {data.customFields?.map((field) => (
+                    <div key={field.id} className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Label"
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-zinc-200 text-xs focus:outline-none focus:ring-2 focus:ring-zinc-900/5"
+                        value={field.label}
+                        onChange={(e) => updateCustomField(field.id, 'label', e.target.value)}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Value"
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-zinc-200 text-xs focus:outline-none focus:ring-2 focus:ring-zinc-900/5"
+                        value={field.value}
+                        onChange={(e) => updateCustomField(field.id, 'value', e.target.value)}
+                      />
+                      <button onClick={() => removeCustomField(field.id)} className="p-1.5 text-zinc-400 hover:text-red-500">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white p-6 rounded-2xl border border-zinc-100 shadow-sm space-y-4">
             <h3 className="text-lg font-semibold text-zinc-900 mb-4">Business Details</h3>
             <div className="grid grid-cols-1 gap-4">
@@ -351,7 +419,7 @@ export default function InvoiceGenerator({ onBack, onActivity }: { onBack: () =>
                 <Plus size={16} /> Add Item
               </button>
             </div>
-            {data.items.map((item, index) => (
+            {(data.items || []).map((item, index) => (
               <div key={index} className="space-y-2">
                 <div className="flex gap-2 sm:gap-4 items-start">
                   <div className="flex-1 relative">
@@ -405,44 +473,173 @@ export default function InvoiceGenerator({ onBack, onActivity }: { onBack: () =>
           <div className="sticky top-6">
             <div 
               ref={invoiceRef}
-              className="bg-white p-8 sm:p-16 shadow-2xl border border-zinc-100 h-auto min-h-[800px] flex flex-col transition-all duration-500"
+              className={cn(
+                "bg-white shadow-2xl border border-zinc-100 h-auto min-h-[800px] flex flex-col transition-all duration-500 overflow-hidden",
+                data.template === 'minimal' && "p-8 sm:p-16",
+                data.template === 'professional' && "p-0",
+                data.template === 'compact' && "p-6 sm:p-10"
+              )}
               style={{ fontFamily: "'Inter', sans-serif" }}
             >
-              <div className="mb-20 flex justify-between items-start">
-                <div className="relative">
-                  {data.logoUrl && (
-                    <div className="w-12 h-12 mb-6 opacity-50 grayscale">
-                      <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+              {data.template === 'minimal' && (
+                <>
+                  <div className="mb-20 flex justify-between items-start">
+                    <div className="relative">
+                      {data.logoUrl && (
+                        <div className="w-12 h-12 mb-6 opacity-50 grayscale">
+                          <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                        </div>
+                      )}
+                      <h2 className="text-2xl font-black text-zinc-900">{data.businessName}</h2>
+                      <p className="text-zinc-400 text-xs tracking-[0.3em] uppercase">Invoice / {data.invoiceNumber}</p>
                     </div>
-                  )}
-                  <h2 className="text-2xl font-black text-zinc-900">{data.businessName}</h2>
-                  <p className="text-zinc-400 text-xs tracking-[0.3em] uppercase">Invoice / {data.invoiceNumber}</p>
-                </div>
-                <div className="text-right space-y-4">
-                  <div className="text-xs text-zinc-400 uppercase tracking-widest">
-                    <p>Issued: {data.date}</p>
-                    <p>Due: {data.dueDate}</p>
+                    <div className="text-right space-y-4">
+                      <div className="text-xs text-zinc-400 uppercase tracking-widest">
+                        <p>Issued: {data.date}</p>
+                        <p>Due: {data.dueDate}</p>
+                      </div>
+                      <div className="text-[10px] text-zinc-300 uppercase tracking-[0.2em] space-y-1">
+                        {data.businessPhone && <p>{data.businessPhone}</p>}
+                        {data.businessEmail && <p>{data.businessEmail}</p>}
+                        {data.customFields?.map(f => f.label && f.value && (
+                          <p key={f.id}>{f.label}: {f.value}</p>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-[10px] text-zinc-300 uppercase tracking-[0.2em] space-y-1">
-                    {data.businessPhone && <p>{data.businessPhone}</p>}
-                    {data.businessEmail && <p>{data.businessEmail}</p>}
-                  </div>
-                </div>
-              </div>
 
-              <div className="space-y-10 mb-20">
-                {data.items.map((item, index) => (
-                  <div key={index} className="flex justify-between items-baseline group">
-                    <div className="flex-1 border-b border-zinc-100 mr-8 pb-2">
-                      <span className="text-zinc-900 font-medium">{item.description}</span>
-                    </div>
-                    <span className="font-mono text-xl text-zinc-900">{data.currency}{item.amount.toFixed(2)}</span>
+                  <div className="space-y-10 mb-20">
+                    {(data.items || []).map((item, index) => (
+                      <div key={index} className="flex justify-between items-baseline group">
+                        <div className="flex-1 border-b border-zinc-100 mr-8 pb-2">
+                          <span className="text-zinc-900 font-medium">{item.description}</span>
+                        </div>
+                        <span className="font-mono text-xl text-zinc-900">{data.currency}{item.amount.toFixed(2)}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </>
+              )}
+
+              {data.template === 'professional' && (
+                <>
+                  <div className="bg-zinc-900 text-white p-12 flex justify-between items-center">
+                    <div>
+                      <h2 className="text-4xl font-bold mb-2">INVOICE</h2>
+                      <p className="text-zinc-400 font-mono">#{data.invoiceNumber}</p>
+                    </div>
+                    {data.logoUrl && (
+                      <div className="w-16 h-16 bg-white rounded-xl p-2">
+                        <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="p-12 grid grid-cols-2 gap-12">
+                    <div>
+                      <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4">From</h4>
+                      <p className="font-bold text-zinc-900">{data.businessName}</p>
+                      <p className="text-sm text-zinc-500 whitespace-pre-line">{data.businessAddress}</p>
+                      <div className="mt-4 text-sm text-zinc-500 space-y-1">
+                        {data.businessPhone && <p>{data.businessPhone}</p>}
+                        {data.businessEmail && <p>{data.businessEmail}</p>}
+                        {data.customFields?.map(f => f.label && f.value && (
+                          <p key={f.id}><span className="font-bold">{f.label}:</span> {f.value}</p>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4">Bill To</h4>
+                      <p className="font-bold text-zinc-900">{data.customerName}</p>
+                      <p className="text-sm text-zinc-500">{data.clientEmail}</p>
+                      <div className="mt-8 grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-[10px] font-bold text-zinc-400 uppercase">Issue Date</p>
+                          <p className="text-sm font-bold">{data.date}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-zinc-400 uppercase">Due Date</p>
+                          <p className="text-sm font-bold text-red-600">{data.dueDate}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="px-12 mb-12">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b-2 border-zinc-900">
+                          <th className="py-4 text-xs font-bold uppercase tracking-widest">Description</th>
+                          <th className="py-4 text-right text-xs font-bold uppercase tracking-widest">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(data.items || []).map((item, index) => (
+                          <tr key={index} className="border-b border-zinc-100">
+                            <td className="py-6 text-zinc-900 font-medium">{item.description}</td>
+                            <td className="py-6 text-right font-mono text-lg">{data.currency}{item.amount.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {data.template === 'compact' && (
+                <>
+                  <div className="flex justify-between items-start border-b-2 border-zinc-100 pb-6 mb-6">
+                    <div className="flex items-center gap-4">
+                      {data.logoUrl && (
+                        <div className="w-10 h-10">
+                          <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                        </div>
+                      )}
+                      <div>
+                        <h2 className="text-xl font-bold">{data.businessName}</h2>
+                        <p className="text-xs text-zinc-500">{data.businessEmail}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <h2 className="text-xl font-black text-zinc-900">INVOICE</h2>
+                      <p className="text-xs font-mono text-zinc-400">#{data.invoiceNumber}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-6 mb-8 bg-zinc-50 p-4 rounded-xl">
+                    <div>
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1">Client</p>
+                      <p className="text-sm font-bold truncate">{data.customerName}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1">Date</p>
+                      <p className="text-sm font-bold">{data.date}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1">Due</p>
+                      <p className="text-sm font-bold">{data.dueDate}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 mb-8">
+                    {(data.items || []).map((item, index) => (
+                      <div key={index} className="flex justify-between items-center text-sm">
+                        <span className="text-zinc-600">{item.description}</span>
+                        <span className="font-bold">{data.currency}{item.amount.toFixed(2)}</span>
+                      </div>
+                    ))}
+                    {data.customFields?.map(f => f.label && f.value && (
+                      <div key={f.id} className="flex justify-between items-center text-[10px] text-zinc-400 border-t border-zinc-50 pt-2">
+                        <span>{f.label}</span>
+                        <span>{f.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
 
               {/* Common Footer Totals */}
-              <div className="mt-auto">
+              <div className={cn("mt-auto", data.template === 'professional' && "p-12 bg-zinc-50")}>
                 <div className="flex justify-end mb-12">
                   <div className="w-full sm:w-64 space-y-3">
                     <div className="flex justify-between text-zinc-500">
@@ -460,26 +657,15 @@ export default function InvoiceGenerator({ onBack, onActivity }: { onBack: () =>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 pt-8 border-t border-zinc-100">
+                <div className={cn(
+                  "grid grid-cols-1 sm:grid-cols-2 gap-8 pt-8 border-t border-zinc-100",
+                  data.template === 'professional' && "border-zinc-200"
+                )}>
                   <div className="space-y-6">
                     <div>
                       <p className="text-xs uppercase tracking-widest font-semibold mb-2 text-zinc-400">Payment Info</p>
                       <p className="text-sm text-zinc-700">{data.paymentMethod}</p>
-                      {businessSettings?.accountNumber && (
-                        <div className="mt-2 text-xs space-y-1 text-zinc-500">
-                          <p className="font-bold">{businessSettings.bankName}</p>
-                          <p className="font-mono">{businessSettings.accountNumber}</p>
-                          <p>{businessSettings.accountName}</p>
-                        </div>
-                      )}
                     </div>
-
-                    {getQRCodeValue() && (
-                      <div className="p-2 bg-white border rounded-lg shadow-sm inline-block border-zinc-100">
-                        <QRCodeSVG value={getQRCodeValue()} size={80} level="H" />
-                        <p className="text-[8px] text-center mt-1 text-zinc-400 uppercase tracking-widest">Scan to Pay</p>
-                      </div>
-                    )}
                   </div>
 
                   <div className="flex flex-col items-end gap-6">
@@ -491,6 +677,14 @@ export default function InvoiceGenerator({ onBack, onActivity }: { onBack: () =>
                     )}
                   </div>
                 </div>
+
+                {businessSettings?.plan === 'Free' && (
+                  <div className="mt-12 pt-4 border-t border-zinc-50 text-center">
+                    <p className="text-[10px] text-zinc-300 uppercase tracking-widest font-bold">
+                      Generated with <span className="text-zinc-900">SwiftTools</span>
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -534,8 +728,8 @@ export default function InvoiceGenerator({ onBack, onActivity }: { onBack: () =>
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                {clients.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.email.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
-                  clients.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.email.toLowerCase().includes(searchQuery.toLowerCase())).map(client => (
+                {(clients || []).filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.email.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
+                  (clients || []).filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.email.toLowerCase().includes(searchQuery.toLowerCase())).map(client => (
                     <button
                       key={client.id}
                       onClick={() => {
@@ -606,8 +800,8 @@ export default function InvoiceGenerator({ onBack, onActivity }: { onBack: () =>
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                {products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.category.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
-                  products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.category.toLowerCase().includes(searchQuery.toLowerCase())).map(product => (
+                {(products || []).filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.category.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
+                  (products || []).filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.category.toLowerCase().includes(searchQuery.toLowerCase())).map(product => (
                     <button
                       key={product.id}
                       onClick={() => {

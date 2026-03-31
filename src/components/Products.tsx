@@ -27,7 +27,7 @@ export default function Products({ onBack, onActivity }: ProductsProps) {
   useEffect(() => {
     const savedProducts = localStorage.getItem('swifttools_products');
     if (savedProducts) {
-      setProducts(JSON.parse(savedProducts));
+      setProducts(JSON.parse(savedProducts) || []);
     }
   }, []);
 

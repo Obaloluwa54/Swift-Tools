@@ -13,25 +13,36 @@ import {
   Users, 
   Package,
   Clock,
-  CheckCircle2
+  CheckCircle2,
+  Crown,
+  Zap,
+  AlertTriangle,
+  DollarSign,
+  Calculator
 } from 'lucide-react';
-import { Activity } from './types';
+import { Activity, BusinessSettings } from './types';
 import { cn } from './utils';
 import ReceiptGenerator from './components/ReceiptGenerator';
 import InvoiceGenerator from './components/InvoiceGenerator';
+import QuoteGenerator from './components/QuoteGenerator';
+import TaxCalculator from './components/TaxCalculator';
 import SettingsComponent from './components/Settings';
 import Clients from './components/Clients';
 import Products from './components/Products';
 import HelpCenter from './components/HelpCenter';
 import ConfirmModal from './components/ConfirmModal';
+import Dashboard from './components/Dashboard';
+import ExpenseTracker from './components/ExpenseTracker';
 
-type Tool = 'dashboard' | 'receipt' | 'invoice' | 'settings' | 'clients' | 'products' | 'help';
+type Tool = 'dashboard' | 'receipt' | 'invoice' | 'settings' | 'clients' | 'products' | 'help' | 'pricing' | 'expenses' | 'quote' | 'tax';
 
 export default function App() {
   const [activeTool, setActiveTool] = useState<Tool>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [settings, setSettings] = useState<BusinessSettings | null>(null);
+  const [showLimitModal, setShowLimitModal] = useState(false);
 
   const [stats, setStats] = useState({
     invoices: 0,
@@ -41,9 +52,26 @@ export default function App() {
   });
 
   useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [activeTool]);
+
+  const loadSettings = () => {
+    const saved = localStorage.getItem('swifttools_settings');
+    if (saved) {
+      setSettings(JSON.parse(saved));
+    }
+  };
+
+  useEffect(() => {
+    loadSettings();
+    window.addEventListener('settingsUpdated', loadSettings);
+    return () => window.removeEventListener('settingsUpdated', loadSettings);
+  }, []);
+
+  useEffect(() => {
     const savedActivities = localStorage.getItem('swifttools_activities');
     if (savedActivities) {
-      setActivities(JSON.parse(savedActivities));
+      setActivities(JSON.parse(savedActivities) || []);
     }
   }, []);
 
@@ -111,10 +139,43 @@ export default function App() {
       description: 'Manage your products and services with pre-set pricing.',
       icon: <Package className="w-6 h-6" />,
       color: 'bg-orange-50 text-orange-600',
+    },
+    {
+      id: 'quote' as Tool,
+      name: 'Quote Generator',
+      description: 'Create professional quotes for your potential clients.',
+      icon: <FileText className="w-6 h-6" />,
+      color: 'bg-amber-50 text-amber-600',
+    },
+    {
+      id: 'tax' as Tool,
+      name: 'Tax Calculator',
+      description: 'Quickly calculate VAT and other taxes for your business.',
+      icon: <Calculator className="w-6 h-6" />,
+      color: 'bg-zinc-50 text-zinc-600',
+    },
+    {
+      id: 'expenses' as Tool,
+      name: 'Expense Tracker',
+      description: 'Keep track of your business spending and categories.',
+      icon: <DollarSign className="w-6 h-6" />,
+      color: 'bg-red-50 text-red-600',
     }
   ];
 
   const handleToolSelect = (tool: Tool) => {
+    if ((tool === 'receipt' || tool === 'invoice' || tool === 'quote' || tool === 'expenses') && settings?.plan === 'Free') {
+      const totalDocs = stats.invoices + stats.receipts + (activities.filter(a => a.type === 'quote').length);
+      // Expenses are Pro only
+      if (tool === 'expenses') {
+        setShowLimitModal(true);
+        return;
+      }
+      if (totalDocs >= 10) {
+        setShowLimitModal(true);
+        return;
+      }
+    }
     setActiveTool(tool);
     setIsMobileMenuOpen(false);
   };
@@ -167,14 +228,31 @@ export default function App() {
             >
               {tool.id === 'receipt' && <Receipt size={20} />}
               {tool.id === 'invoice' && <FileText size={20} />}
+              {tool.id === 'quote' && <FileText size={20} className="rotate-12" />}
+              {tool.id === 'tax' && <Calculator size={20} />}
               {tool.id === 'clients' && <Users size={20} />}
               {tool.id === 'products' && <Package size={20} />}
+              {tool.id === 'expenses' && <DollarSign size={20} />}
               <span className="font-medium">{tool.name}</span>
+              {settings?.plan === 'Free' && (tool.id === 'receipt' || tool.id === 'invoice' || tool.id === 'quote' || tool.id === 'expenses') && (
+                <span className="ml-auto text-[10px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded font-bold">
+                  {tool.id === 'expenses' ? 'Pro' : 'Free'}
+                </span>
+              )}
             </button>
           ))}
         </div>
 
         <div className="space-y-2 pt-6 border-t border-zinc-100">
+          {settings?.plan === 'Free' && (
+            <button 
+              onClick={() => handleToolSelect('settings')}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 transition-all mb-2"
+            >
+              <Crown size={20} />
+              <span className="font-bold text-sm">Upgrade to Pro</span>
+            </button>
+          )}
           <button 
             onClick={() => handleToolSelect('settings')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTool === 'settings' ? 'bg-zinc-900 text-white shadow-lg shadow-zinc-900/20' : 'text-zinc-500 hover:bg-zinc-50'}`}
@@ -209,139 +287,11 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="p-6 md:p-12 max-w-6xl mx-auto"
             >
-              <header className="mb-12">
-                <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-2">Welcome back!</h1>
-                <p className="text-zinc-500 text-base md:text-lg">Select a tool to get started with your business tasks.</p>
-              </header>
-
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
-                {[
-                  { label: 'Invoices', value: stats.invoices, icon: <FileText size={18} />, color: 'text-blue-600', bg: 'bg-blue-50' },
-                  { label: 'Receipts', value: stats.receipts, icon: <Receipt size={18} />, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-                  { label: 'Clients', value: stats.clients, icon: <Users size={18} />, color: 'text-purple-600', bg: 'bg-purple-50' },
-                  { label: 'Products', value: stats.products, icon: <Package size={18} />, color: 'text-orange-600', bg: 'bg-orange-50' },
-                ].map((stat, i) => (
-                  <div key={i} className="bg-white p-4 md:p-6 rounded-3xl border border-zinc-100 shadow-sm">
-                    <div className={`w-10 h-10 ${stat.bg} ${stat.color} rounded-xl flex items-center justify-center mb-4`}>
-                      {stat.icon}
-                    </div>
-                    <p className="text-2xl md:text-3xl font-bold text-zinc-900">{stat.value}</p>
-                    <p className="text-xs md:text-sm text-zinc-500 font-medium">{stat.label}</p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <div className="bg-indigo-600 p-8 rounded-3xl text-white shadow-xl shadow-indigo-600/20 relative overflow-hidden">
-                  <div className="relative z-10">
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="px-2 py-1 bg-white/20 rounded text-[10px] font-bold uppercase tracking-widest">Early Access</div>
-                      <div className="px-2 py-1 bg-white/20 rounded text-[10px] font-bold uppercase tracking-widest">Beta</div>
-                    </div>
-                    <h2 className="text-2xl font-bold mb-2">Quick Start Guide</h2>
-                    <p className="text-indigo-100 mb-6 text-sm">Complete these steps to get your business up and running.</p>
-                    
-                    <div className="space-y-3">
-                      {[
-                        { label: "Set up business profile", done: stats.invoices > 0 || stats.receipts > 0 },
-                        { label: "Add your first client", done: stats.clients > 0 },
-                        { label: "Create a product catalog", done: stats.products > 0 },
-                        { label: "Generate your first document", done: stats.invoices > 0 || stats.receipts > 0 }
-                      ].map((step, i) => (
-                        <div key={i} className="flex items-center gap-3">
-                          <div className={cn(
-                            "w-5 h-5 rounded-full flex items-center justify-center border-2 transition-colors",
-                            step.done ? "bg-white border-white text-indigo-600" : "border-white/30"
-                          )}>
-                            {step.done && <CheckCircle2 size={12} />}
-                          </div>
-                          <span className={cn("text-sm font-medium", step.done ? "text-white/60 line-through" : "text-white")}>
-                            {step.label}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <Sparkles className="absolute -right-4 -bottom-4 text-white/10 w-32 h-32" />
-                </div>
-
-                {tools.map((tool) => (
-                  <button
-                    key={tool.id}
-                    onClick={() => handleToolSelect(tool.id)}
-                    className="group relative bg-white p-6 md:p-8 rounded-3xl border border-zinc-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all text-left overflow-hidden"
-                  >
-                    <div className={`w-12 h-12 md:w-14 md:h-14 ${tool.color} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
-                      {tool.icon}
-                    </div>
-                    <h3 className="text-lg md:text-xl font-bold mb-2">{tool.name}</h3>
-                    <p className="text-zinc-500 text-sm md:text-base leading-relaxed mb-6">{tool.description}</p>
-                    <div className="flex items-center gap-2 text-zinc-900 font-semibold">
-                      Get Started <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                    </div>
-                    
-                    {/* Decorative element */}
-                    <div className="absolute -right-8 -bottom-8 w-24 h-24 md:w-32 md:h-32 bg-zinc-50 rounded-full opacity-50 group-hover:scale-150 transition-transform" />
-                  </button>
-                ))}
-              </div>
-
-              <section className="mt-12 md:mt-16">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl md:text-2xl font-bold">Recent Activity</h2>
-                  {activities.length > 0 && (
-                    <button 
-                      onClick={() => setShowClearConfirm(true)}
-                      className="text-xs font-bold text-red-500 hover:text-red-600 flex items-center gap-1 transition-colors"
-                    >
-                      <X size={14} />
-                      Clear Log
-                    </button>
-                  )}
-                </div>
-                <div className="bg-white rounded-3xl border border-zinc-100 shadow-sm overflow-hidden">
-                  {activities.length > 0 ? (
-                    <div className="divide-y divide-zinc-50">
-                      {activities.map((activity) => (
-                        <div key={activity.id} className="p-4 md:p-6 flex items-center gap-4 hover:bg-zinc-50 transition-colors">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                            activity.type === 'receipt' ? 'bg-blue-50 text-blue-600' :
-                            activity.type === 'invoice' ? 'bg-emerald-50 text-emerald-600' :
-                            activity.type === 'client' ? 'bg-orange-50 text-orange-600' :
-                            'bg-purple-50 text-purple-600'
-                          }`}>
-                            {activity.type === 'receipt' && <Receipt size={18} />}
-                            {activity.type === 'invoice' && <FileText size={18} />}
-                            {activity.type === 'client' && <Users size={18} />}
-                            {activity.type === 'product' && <Package size={18} />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-zinc-900 truncate">{activity.action}</p>
-                            <p className="text-xs text-zinc-500 truncate">{activity.details}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-[10px] text-zinc-400 uppercase tracking-widest font-semibold">
-                              {new Date(activity.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                            </p>
-                            <p className="text-[10px] text-zinc-400">
-                              {new Date(activity.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="p-8 text-center py-12 md:py-16">
-                      <div className="w-12 h-12 md:w-16 md:h-16 bg-zinc-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Clock className="text-zinc-300" />
-                      </div>
-                      <p className="text-zinc-400 text-sm md:text-base">No recent activity found. Start by creating a document!</p>
-                    </div>
-                  )}
-                </div>
-              </section>
+              <Dashboard 
+                onNavigate={handleToolSelect} 
+                plan={settings?.plan || 'Free'} 
+              />
             </motion.div>
           )}
 
@@ -369,6 +319,33 @@ export default function App() {
               <InvoiceGenerator 
                 onBack={() => setActiveTool('dashboard')} 
                 onActivity={(action, details) => logActivity('invoice', action, details)}
+              />
+            </motion.div>
+          )}
+
+          {activeTool === 'quote' && (
+            <motion.div 
+              key="quote"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+            >
+              <QuoteGenerator 
+                onBack={() => setActiveTool('dashboard')} 
+                onActivity={(action, details) => logActivity('quote', action, details)}
+              />
+            </motion.div>
+          )}
+
+          {activeTool === 'tax' && (
+            <motion.div 
+              key="tax"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+            >
+              <TaxCalculator 
+                onBack={() => setActiveTool('dashboard')} 
               />
             </motion.div>
           )}
@@ -422,10 +399,28 @@ export default function App() {
               <HelpCenter onBack={() => setActiveTool('dashboard')} />
             </motion.div>
           )}
+
+          {activeTool === 'expenses' && (
+            <motion.div 
+              key="expenses"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+            >
+              <ExpenseTracker 
+                onBack={() => setActiveTool('dashboard')} 
+                onActivity={(action, details) => logActivity('expense', action, details)}
+              />
+            </motion.div>
+          )}
         </AnimatePresence>
 
         <footer className="p-8 border-t border-zinc-100 text-center text-zinc-400 text-sm no-print">
-          <p>© {new Date().getFullYear()} SwiftTools. Built with <span className="text-zinc-900 font-bold">Genix</span>.</p>
+          {settings?.plan === 'Free' ? (
+            <p>© {new Date().getFullYear()} SwiftTools. Built with <span className="text-zinc-900 font-bold">Genix</span>.</p>
+          ) : (
+            <p>© {new Date().getFullYear()} {settings?.businessName || 'SwiftTools'}. All rights reserved.</p>
+          )}
         </footer>
       </main>
 
@@ -452,6 +447,21 @@ export default function App() {
         message="Are you sure you want to clear your entire activity log? This action cannot be undone."
         confirmText="Clear Log"
         type="danger"
+      />
+
+      {/* Limit Modal */}
+      <ConfirmModal 
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        onConfirm={() => {
+          setShowLimitModal(false);
+          setActiveTool('settings');
+        }}
+        title="Document Limit Reached"
+        message="You have reached the limit of 10 documents for the Free plan. Upgrade to Pro for unlimited documents and custom branding."
+        confirmText="Upgrade Now"
+        type="primary"
+        icon={<AlertTriangle className="text-amber-500" />}
       />
     </div>
   );

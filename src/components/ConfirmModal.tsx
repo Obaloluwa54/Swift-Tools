@@ -10,7 +10,8 @@ interface ConfirmModalProps {
   message: string;
   confirmText?: string;
   cancelText?: string;
-  type?: 'danger' | 'warning' | 'info';
+  type?: 'danger' | 'warning' | 'info' | 'primary';
+  icon?: React.ReactNode;
 }
 
 export default function ConfirmModal({
@@ -21,7 +22,8 @@ export default function ConfirmModal({
   message,
   confirmText = 'Confirm',
   cancelText = 'Cancel',
-  type = 'danger'
+  type = 'danger',
+  icon
 }: ConfirmModalProps) {
   return (
     <AnimatePresence>
@@ -45,9 +47,10 @@ export default function ConfirmModal({
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
                   type === 'danger' ? 'bg-red-50 text-red-600' : 
                   type === 'warning' ? 'bg-amber-50 text-amber-600' : 
+                  type === 'primary' ? 'bg-zinc-900 text-white' :
                   'bg-blue-50 text-blue-600'
                 }`}>
-                  <AlertTriangle size={24} />
+                  {icon || <AlertTriangle size={24} />}
                 </div>
                 <button 
                   onClick={onClose}
@@ -75,6 +78,7 @@ export default function ConfirmModal({
                   className={`flex-1 px-6 py-3 rounded-xl font-semibold text-white transition-all shadow-lg ${
                     type === 'danger' ? 'bg-red-600 hover:bg-red-700 shadow-red-600/20' : 
                     type === 'warning' ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/20' : 
+                    type === 'primary' ? 'bg-zinc-900 hover:bg-zinc-800 shadow-zinc-900/20' :
                     'bg-zinc-900 hover:bg-zinc-800 shadow-zinc-900/20'
                   }`}
                 >

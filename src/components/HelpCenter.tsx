@@ -25,6 +25,16 @@ export default function HelpCenter({ onBack }: HelpCenterProps) {
 
   const faqs = [
     {
+      question: "What is the Pro Plan?",
+      answer: "The Pro Plan offers unlimited receipt and invoice generation, custom branding (removes 'Generated with SwiftTools'), and advanced features like the Expense Tracker and detailed business analytics.",
+      category: "Pro Plan"
+    },
+    {
+      question: "How do I integrate Paystack?",
+      answer: "Go to Settings > Payment and enter your Paystack Public Key. This allows you to accept payments directly through your generated invoices and receipts via QR codes.",
+      category: "Payments"
+    },
+    {
       question: "How do I download my invoice as PDF?",
       answer: "Once you've filled in all the details, click the 'PDF' button at the top right of the invoice generator. This will automatically generate and download a professional PDF version of your invoice.",
       category: "Invoices & Receipts"
@@ -58,6 +68,7 @@ export default function HelpCenter({ onBack }: HelpCenterProps) {
 
   const categories = [
     { icon: <Book className="text-blue-600" />, title: "Getting Started", count: 2 },
+    { icon: <Zap className="text-orange-600" />, title: "Pro Plan", count: 1 },
     { icon: <FileText className="text-emerald-600" />, title: "Invoices & Receipts", count: 2 },
     { icon: <Shield className="text-purple-600" />, title: "Privacy & Security", count: 1 },
     { icon: <Zap className="text-orange-600" />, title: "Pro Tips", count: 1 },

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Users, Plus, Search, Mail, Phone, MapPin, Edit2, Trash2, X, CheckCircle2, UserPlus } from 'lucide-react';
 import { Client } from '../types';
+import { cn } from '../utils';
 import ConfirmModal from './ConfirmModal';
 
 interface ClientsProps {
@@ -14,6 +15,7 @@ export default function Clients({ onBack, onActivity }: ClientsProps) {
   const [isAddingClient, setIsAddingClient] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState<string>('All');
   const [showSuccess, setShowSuccess] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<string | null>(null);
 
@@ -23,12 +25,13 @@ export default function Clients({ onBack, onActivity }: ClientsProps) {
     phone: '',
     address: '',
     notes: '',
+    category: 'Other',
   });
 
   useEffect(() => {
     const savedClients = localStorage.getItem('swifttools_clients');
     if (savedClients) {
-      setClients(JSON.parse(savedClients));
+      setClients(JSON.parse(savedClients) || []);
     }
   }, []);
 
@@ -53,7 +56,7 @@ export default function Clients({ onBack, onActivity }: ClientsProps) {
       saveClients([newClient, ...clients]);
       onActivity?.('Added Client', `Added client: ${formData.name}`);
     }
-    setFormData({ name: '', email: '', phone: '', address: '', notes: '' });
+    setFormData({ name: '', email: '', phone: '', address: '', notes: '', category: 'Other' });
     setIsAddingClient(false);
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
@@ -75,14 +78,28 @@ export default function Clients({ onBack, onActivity }: ClientsProps) {
       phone: client.phone,
       address: client.address,
       notes: client.notes || '',
+      category: client.category || 'Other',
     });
     setIsAddingClient(true);
   };
 
-  const filteredClients = clients.filter((client) =>
-    client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    client.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredClients = clients.filter((client) => {
+    const matchesSearch = client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      client.email.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = activeCategory === 'All' || client.category === activeCategory;
+    return matchesSearch && matchesCategory;
+  });
+
+  const categories = ['All', 'Potential', 'Repeat', 'VIP', 'Other'];
+
+  const getCategoryColor = (category?: string) => {
+    switch (category) {
+      case 'Potential': return 'bg-blue-50 text-blue-600 border-blue-100';
+      case 'Repeat': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
+      case 'VIP': return 'bg-purple-50 text-purple-600 border-purple-100';
+      default: return 'bg-zinc-50 text-zinc-600 border-zinc-100';
+    }
+  };
 
   return (
     <div className="p-6 md:p-12 max-w-6xl mx-auto">
@@ -100,15 +117,42 @@ export default function Clients({ onBack, onActivity }: ClientsProps) {
         </button>
       </header>
 
-      <div className="mb-8 relative">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
-        <input
-          type="text"
-          placeholder="Search clients by name or email..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-12 pr-4 py-4 rounded-2xl border border-zinc-100 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all"
-        />
+      <div className="mb-8 space-y-4">
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
+          <input
+            type="text"
+            placeholder="Search clients by name or email..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-12 pr-12 py-4 rounded-2xl border border-zinc-100 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all"
+          />
+          {searchQuery && (
+            <button 
+              onClick={() => setSearchQuery('')}
+              className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-zinc-100 rounded-full text-zinc-400 hover:text-zinc-900 transition-colors"
+            >
+              <X size={18} />
+            </button>
+          )}
+        </div>
+        
+        <div className="flex flex-wrap gap-2">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={cn(
+                "px-4 py-2 rounded-xl text-sm font-medium transition-all border",
+                activeCategory === cat 
+                  ? "bg-zinc-900 text-white border-zinc-900 shadow-md" 
+                  : "bg-white text-zinc-500 border-zinc-100 hover:border-zinc-200"
+              )}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -123,8 +167,18 @@ export default function Clients({ onBack, onActivity }: ClientsProps) {
               className="bg-white p-6 rounded-3xl border border-zinc-100 shadow-sm hover:shadow-md transition-all group"
             >
               <div className="flex justify-between items-start mb-4">
-                <div className="w-12 h-12 bg-zinc-50 rounded-2xl flex items-center justify-center text-zinc-900 font-bold text-xl">
-                  {client.name.charAt(0)}
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-zinc-50 rounded-2xl flex items-center justify-center text-zinc-900 font-bold text-xl">
+                    {client.name.charAt(0)}
+                  </div>
+                  {client.category && (
+                    <span className={cn(
+                      "px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border",
+                      getCategoryColor(client.category)
+                    )}>
+                      {client.category}
+                    </span>
+                  )}
                 </div>
                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
@@ -165,7 +219,19 @@ export default function Clients({ onBack, onActivity }: ClientsProps) {
         {filteredClients.length === 0 && (
           <div className="col-span-full py-20 text-center bg-white rounded-3xl border border-dashed border-zinc-200">
             <Users className="mx-auto text-zinc-200 mb-4" size={48} />
-            <p className="text-zinc-400">No clients found. Add your first customer!</p>
+            <p className="text-zinc-400">
+              {searchQuery || activeCategory !== 'All' 
+                ? "No clients match your current search or category filters." 
+                : "No clients found. Add your first customer!"}
+            </p>
+            {(searchQuery || activeCategory !== 'All') && (
+              <button 
+                onClick={() => { setSearchQuery(''); setActiveCategory('All'); }}
+                className="mt-4 text-sm font-bold text-zinc-900 hover:underline"
+              >
+                Clear all filters
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -240,15 +306,30 @@ export default function Clients({ onBack, onActivity }: ClientsProps) {
                     placeholder="Client's physical address"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-zinc-700 mb-1">Notes (Optional)</label>
-                  <input
-                    type="text"
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all"
-                    placeholder="Special instructions or details"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-zinc-700 mb-1">Category</label>
+                    <select
+                      value={formData.category}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value as any })}
+                      className="w-full px-4 py-3 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all bg-white"
+                    >
+                      <option value="Potential">Potential</option>
+                      <option value="Repeat">Repeat</option>
+                      <option value="VIP">VIP</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-zinc-700 mb-1">Notes (Optional)</label>
+                    <input
+                      type="text"
+                      value={formData.notes}
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                      className="w-full px-4 py-3 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all"
+                      placeholder="Special instructions"
+                    />
+                  </div>
                 </div>
 
                 <div className="pt-4 flex gap-3">

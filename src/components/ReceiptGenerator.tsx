@@ -3,9 +3,8 @@ import { Download, Plus, Trash2, Printer, ArrowLeft, Share2, MessageCircle, Layo
 import { domToCanvas } from 'modern-screenshot';
 import jsPDF from 'jspdf';
 import { QRCodeSVG } from 'qrcode.react';
-import { ReceiptData, TemplateType, Client, Product } from '../types';
+import { ReceiptData, TemplateType, Client, Product, BusinessSettings } from '../types';
 import { cn } from '../utils';
-import { BusinessSettings } from './Settings';
 import { motion, AnimatePresence } from 'motion/react';
 import ConfirmModal from './ConfirmModal';
 
@@ -29,7 +28,8 @@ export default function ReceiptGenerator({ onBack, onActivity }: { onBack: () =>
     total: 50.00,
     paymentMethod: 'Credit Card',
     notes: 'Thank you for your business!',
-    template: 'minimal'
+    template: 'minimal',
+    customFields: []
   });
   const [error, setError] = useState<string | null>(null);
 
@@ -46,14 +46,16 @@ export default function ReceiptGenerator({ onBack, onActivity }: { onBack: () =>
         businessEmail: settings.email,
         businessWebsite: settings.website,
         logoUrl: settings.logoUrl,
+        template: settings.defaultTemplate || prev.template,
+        customFields: settings.defaultCustomFields ? [...settings.defaultCustomFields] : prev.customFields
       }));
     }
 
     const savedClients = localStorage.getItem('swifttools_clients');
-    if (savedClients) setClients(JSON.parse(savedClients));
+    if (savedClients) setClients(JSON.parse(savedClients) || []);
 
     const savedProducts = localStorage.getItem('swifttools_products');
-    if (savedProducts) setProducts(JSON.parse(savedProducts));
+    if (savedProducts) setProducts(JSON.parse(savedProducts) || []);
   }, []);
 
   const receiptRef = useRef<HTMLDivElement>(null);
@@ -100,13 +102,37 @@ export default function ReceiptGenerator({ onBack, onActivity }: { onBack: () =>
     setData({ ...data, items: newItems, total: calculateTotal(newItems) });
   };
 
+  const addCustomField = () => {
+    setData({
+      ...data,
+      customFields: [...(data.customFields || []), { label: '', value: '' }]
+    });
+  };
+
+  const removeCustomField = (index: number) => {
+    setData({
+      ...data,
+      customFields: data.customFields?.filter((_, i) => i !== index)
+    });
+  };
+
+  const updateCustomField = (index: number, field: 'label' | 'value', value: string) => {
+    const newFields = [...(data.customFields || [])];
+    newFields[index] = { ...newFields[index], [field]: value };
+    setData({ ...data, customFields: newFields });
+  };
+
   const resetForm = () => {
+    const savedSettings = localStorage.getItem('swifttools_settings');
+    const settings = savedSettings ? JSON.parse(savedSettings) : null;
+
     setData({
       ...data,
       customerName: '',
       items: [{ description: '', amount: 0 }],
       total: 0,
-      notes: ''
+      notes: '',
+      customFields: settings?.defaultCustomFields ? [...settings.defaultCustomFields] : []
     });
     onActivity?.('Cleared Form', 'Reset all fields in the receipt generator');
   };
@@ -125,6 +151,11 @@ export default function ReceiptGenerator({ onBack, onActivity }: { onBack: () =>
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
       pdf.save(`${data.receiptNumber}.pdf`);
+      
+      // Save to localStorage for dashboard
+      const savedReceipts = JSON.parse(localStorage.getItem('swifttools_receipts') || '[]');
+      localStorage.setItem('swifttools_receipts', JSON.stringify([data, ...savedReceipts]));
+      
       onActivity?.('Generated Receipt', `Receipt #${data.receiptNumber} for ${data.customerName}`);
     } catch (err) {
       console.error('Failed to generate PDF:', err);
@@ -147,16 +178,6 @@ export default function ReceiptGenerator({ onBack, onActivity }: { onBack: () =>
     const url = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     window.open(url, '_blank');
     onActivity?.('Shared Receipt', `Shared Receipt #${data.receiptNumber} via Email`);
-  };
-
-  const getQRCodeValue = () => {
-    if (businessSettings?.paymentLink) {
-      return businessSettings.paymentLink;
-    }
-    if (businessSettings?.accountNumber) {
-      return `Bank: ${businessSettings.bankName}\nAccount: ${businessSettings.accountNumber}\nName: ${businessSettings.accountName}\nAmount: ${data.currency}${data.total.toFixed(2)}`;
-    }
-    return '';
   };
 
   const handlePrint = () => {
@@ -227,6 +248,26 @@ export default function ReceiptGenerator({ onBack, onActivity }: { onBack: () =>
               {error}
             </motion.div>
           )}
+
+          <div className="bg-white p-6 rounded-2xl border border-zinc-100 shadow-sm space-y-4">
+            <h3 className="text-lg font-semibold text-zinc-900 mb-4">Template</h3>
+            <div className="grid grid-cols-3 gap-2">
+              {(['minimal', 'professional', 'compact'] as TemplateType[]).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setData({ ...data, template: t })}
+                  className={cn(
+                    "px-3 py-2 rounded-lg border text-xs font-medium capitalize transition-all",
+                    data.template === t 
+                      ? "bg-zinc-900 border-zinc-900 text-white shadow-sm" 
+                      : "bg-white border-zinc-200 text-zinc-600 hover:border-zinc-900"
+                  )}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div className="bg-white p-6 rounded-2xl border border-zinc-100 shadow-sm space-y-4">
             <h3 className="text-lg font-semibold text-zinc-900 mb-4">Business Details</h3>
@@ -303,6 +344,47 @@ export default function ReceiptGenerator({ onBack, onActivity }: { onBack: () =>
 
           <div className="bg-white p-6 rounded-2xl border border-zinc-100 shadow-sm space-y-4">
             <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-zinc-900">Custom Fields</h3>
+              <button 
+                onClick={addCustomField}
+                className="flex items-center gap-1 text-sm text-zinc-600 hover:text-zinc-900"
+              >
+                <Plus size={16} /> Add Field
+              </button>
+            </div>
+            <div className="space-y-3">
+              {data.customFields?.map((field, index) => (
+                <div key={index} className="flex gap-2 items-start">
+                  <input 
+                    type="text" 
+                    placeholder="Label"
+                    className="flex-1 px-3 py-2 rounded-lg border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/5 text-sm"
+                    value={field.label}
+                    onChange={(e) => updateCustomField(index, 'label', e.target.value)}
+                  />
+                  <input 
+                    type="text" 
+                    placeholder="Value"
+                    className="flex-1 px-3 py-2 rounded-lg border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-900/5 text-sm"
+                    value={field.value}
+                    onChange={(e) => updateCustomField(index, 'value', e.target.value)}
+                  />
+                  <button 
+                    onClick={() => removeCustomField(index)}
+                    className="p-2 text-zinc-400 hover:text-red-500 transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ))}
+              {(!data.customFields || data.customFields.length === 0) && (
+                <p className="text-xs text-zinc-400 text-center py-2 italic">No custom fields added</p>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl border border-zinc-100 shadow-sm space-y-4">
+            <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-zinc-900">Items</h3>
               <button 
                 onClick={addItem}
@@ -311,7 +393,7 @@ export default function ReceiptGenerator({ onBack, onActivity }: { onBack: () =>
                 <Plus size={16} /> Add Item
               </button>
             </div>
-            {data.items.map((item, index) => (
+            {(data.items || []).map((item, index) => (
               <div key={index} className="space-y-2">
                 <div className="flex gap-2 sm:gap-4 items-start">
                   <div className="flex-1 relative">
@@ -354,36 +436,137 @@ export default function ReceiptGenerator({ onBack, onActivity }: { onBack: () =>
           <div className="sticky top-6">
             <div 
               ref={receiptRef}
-              className="bg-white p-8 sm:p-16 shadow-2xl border border-zinc-100 h-auto min-h-[600px] flex flex-col transition-all duration-500"
+              className={cn(
+                "bg-white shadow-2xl border border-zinc-100 h-auto min-h-[600px] flex flex-col transition-all duration-500",
+                data.template === 'minimal' ? "p-8 sm:p-16" : 
+                data.template === 'professional' ? "p-0" : "p-6 sm:p-10"
+              )}
               style={{ fontFamily: "'Inter', sans-serif" }}
             >
-              <div className="mb-16 flex justify-between items-start">
-                <h1 className="text-6xl font-black text-zinc-900 opacity-10 absolute top-8 left-8 select-none">REC</h1>
-                <div className="relative">
-                  {data.logoUrl && (
-                    <div className="w-10 h-10 mb-4 opacity-50 grayscale">
-                      <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+              {data.template === 'minimal' && (
+                <>
+                  <div className="mb-16 flex justify-between items-start">
+                    <h1 className="text-6xl font-black text-zinc-900 opacity-10 absolute top-8 left-8 select-none">REC</h1>
+                    <div className="relative">
+                      {data.logoUrl && (
+                        <div className="w-10 h-10 mb-4 opacity-50 grayscale">
+                          <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                        </div>
+                      )}
+                      <h2 className="text-xl font-bold text-zinc-900">{data.businessName}</h2>
+                      <p className="text-zinc-400 text-xs tracking-widest uppercase">{data.receiptNumber} / {data.date}</p>
                     </div>
-                  )}
-                  <h2 className="text-xl font-bold text-zinc-900">{data.businessName}</h2>
-                  <p className="text-zinc-400 text-xs tracking-widest uppercase">{data.receiptNumber} / {data.date}</p>
-                </div>
-                <div className="text-right text-[10px] text-zinc-400 uppercase tracking-widest space-y-1">
-                  {data.businessPhone && <p>{data.businessPhone}</p>}
-                  {data.businessWebsite && <p>{data.businessWebsite}</p>}
-                </div>
-              </div>
-
-              <div className="space-y-8 mb-16">
-                {data.items.map((item, index) => (
-                  <div key={index} className="flex justify-between items-baseline">
-                    <div className="flex-1 border-b border-dotted border-zinc-200 mr-4">
-                      <span className="bg-white pr-2 text-zinc-600">{item.description}</span>
+                    <div className="text-right text-[10px] text-zinc-400 uppercase tracking-widest space-y-1">
+                      {data.businessPhone && <p>{data.businessPhone}</p>}
+                      {data.businessWebsite && <p>{data.businessWebsite}</p>}
+                      {data.customFields?.map((field, idx) => (
+                        <p key={idx}>{field.label}: {field.value}</p>
+                      ))}
                     </div>
-                    <span className="font-mono text-zinc-900">{data.currency}{item.amount.toFixed(2)}</span>
                   </div>
-                ))}
-              </div>
+
+                  <div className="space-y-8 mb-16">
+                    {(data.items || []).map((item, index) => (
+                      <div key={index} className="flex justify-between items-baseline">
+                        <div className="flex-1 border-b border-dotted border-zinc-200 mr-4">
+                          <span className="bg-white pr-2 text-zinc-600">{item.description}</span>
+                        </div>
+                        <span className="font-mono text-zinc-900">{data.currency}{item.amount.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {data.template === 'professional' && (
+                <>
+                  <div className="bg-zinc-900 text-white p-8 sm:p-12 mb-8">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        {data.logoUrl && (
+                          <div className="w-12 h-12 mb-4 bg-white p-2 rounded-lg">
+                            <img src={data.logoUrl} alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                          </div>
+                        )}
+                        <h2 className="text-2xl font-bold">{data.businessName}</h2>
+                        <p className="text-zinc-400 text-sm">{data.businessAddress}</p>
+                      </div>
+                      <div className="text-right">
+                        <h1 className="text-3xl font-black tracking-tighter mb-2">RECEIPT</h1>
+                        <p className="text-zinc-400 text-xs uppercase tracking-widest">#{data.receiptNumber}</p>
+                        <p className="text-zinc-400 text-xs">{data.date}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="px-8 sm:px-12 py-4">
+                    <div className="grid grid-cols-2 gap-8 mb-8">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 mb-2">Customer</p>
+                        <p className="text-sm font-bold text-zinc-900">{data.customerName}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 mb-2">Details</p>
+                        <div className="text-xs text-zinc-600 space-y-1">
+                          <p>Method: {data.paymentMethod}</p>
+                          {data.customFields?.map((field, idx) => (
+                            <p key={idx}>{field.label}: {field.value}</p>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <table className="w-full mb-8">
+                      <thead>
+                        <tr className="border-b-2 border-zinc-900">
+                          <th className="text-left py-3 text-xs uppercase tracking-widest font-bold text-zinc-900">Description</th>
+                          <th className="text-right py-3 text-xs uppercase tracking-widest font-bold text-zinc-900">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(data.items || []).map((item, index) => (
+                          <tr key={index} className="border-b border-zinc-100">
+                            <td className="py-4 text-sm text-zinc-600">{item.description}</td>
+                            <td className="py-4 text-right font-mono text-zinc-900">{data.currency}{item.amount.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {data.template === 'compact' && (
+                <div className="p-4 sm:p-6 border-2 border-zinc-900 m-4 flex-1 flex flex-col">
+                  <div className="text-center border-b-2 border-zinc-900 pb-4 mb-4">
+                    {data.logoUrl && (
+                      <img src={data.logoUrl} alt="Logo" className="w-8 h-8 mx-auto mb-2 object-contain grayscale" referrerPolicy="no-referrer" />
+                    )}
+                    <h2 className="text-lg font-black uppercase tracking-tight">{data.businessName}</h2>
+                    <p className="text-[10px] text-zinc-500">{data.businessAddress}</p>
+                  </div>
+
+                  <div className="flex justify-between text-[10px] uppercase tracking-widest font-bold mb-4">
+                    <span>{data.receiptNumber}</span>
+                    <span>{data.date}</span>
+                  </div>
+
+                  <div className="space-y-2 mb-6 flex-1">
+                    {(data.items || []).map((item, index) => (
+                      <div key={index} className="flex justify-between text-sm">
+                        <span className="text-zinc-600">{item.description}</span>
+                        <span className="font-bold">{data.currency}{item.amount.toFixed(2)}</span>
+                      </div>
+                    ))}
+                    {data.customFields?.map((field, idx) => (
+                      <div key={idx} className="flex justify-between text-[10px] text-zinc-400">
+                        <span>{field.label}</span>
+                        <span>{field.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Common Footer */}
               <div className="mt-auto pt-8 border-t border-zinc-100">
@@ -391,23 +574,8 @@ export default function ReceiptGenerator({ onBack, onActivity }: { onBack: () =>
                   <div className="space-y-6 flex-1">
                     <div>
                       <p className="text-[10px] uppercase tracking-widest font-bold mb-2 text-zinc-400">Payment Info</p>
-                      {businessSettings?.accountNumber ? (
-                        <div className="text-xs space-y-1 text-zinc-500">
-                          <p className="font-bold">{businessSettings.bankName}</p>
-                          <p className="font-mono">{businessSettings.accountNumber}</p>
-                          <p>{businessSettings.accountName}</p>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-zinc-700">{data.paymentMethod}</p>
-                      )}
+                      <p className="text-sm text-zinc-700">{data.paymentMethod}</p>
                     </div>
-                    
-                    {getQRCodeValue() && (
-                      <div className="p-2 bg-white border rounded-lg shadow-sm inline-block border-zinc-100">
-                        <QRCodeSVG value={getQRCodeValue()} size={80} level="H" />
-                        <p className="text-[8px] text-center mt-1 text-zinc-400 uppercase tracking-widest">Scan to Pay</p>
-                      </div>
-                    )}
                   </div>
 
                   <div className="text-right min-w-[200px]">
@@ -422,6 +590,14 @@ export default function ReceiptGenerator({ onBack, onActivity }: { onBack: () =>
                 <div className="mt-8 p-4 rounded-lg bg-zinc-50">
                   <p className="text-xs text-zinc-400 mb-1">Notes</p>
                   <p className="text-sm text-zinc-600 italic">{data.notes}</p>
+                </div>
+              )}
+
+              {businessSettings?.plan === 'Free' && (
+                <div className="mt-8 pt-4 border-t border-zinc-50 text-center">
+                  <p className="text-[10px] text-zinc-300 uppercase tracking-widest font-bold">
+                    Generated with <span className="text-zinc-900">SwiftTools</span>
+                  </p>
                 </div>
               )}
             </div>
@@ -466,8 +642,8 @@ export default function ReceiptGenerator({ onBack, onActivity }: { onBack: () =>
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                {clients.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.email.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
-                  clients.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.email.toLowerCase().includes(searchQuery.toLowerCase())).map(client => (
+                {(clients || []).filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.email.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
+                  (clients || []).filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.email.toLowerCase().includes(searchQuery.toLowerCase())).map(client => (
                     <button
                       key={client.id}
                       onClick={() => {
@@ -534,8 +710,8 @@ export default function ReceiptGenerator({ onBack, onActivity }: { onBack: () =>
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                {products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.category.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
-                  products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.category.toLowerCase().includes(searchQuery.toLowerCase())).map(product => (
+                {(products || []).filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.category.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
+                  (products || []).filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.category.toLowerCase().includes(searchQuery.toLowerCase())).map(product => (
                     <button
                       key={product.id}
                       onClick={() => {
